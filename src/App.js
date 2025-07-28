@@ -515,9 +515,6 @@ Keep each bullet point to 1-2 sentences maximum. Be specific and practical.`;
               </h3>
               {agriDetails ? (
                 <div>
-                  <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '8px', textAlign: 'center' }}>
-                    Debug: Raw data length: {agriDetails.length} characters
-                  </p>
                   <div>
                     {formatAgriDetails(agriDetails)}
                   </div>
