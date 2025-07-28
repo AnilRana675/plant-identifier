@@ -224,16 +224,28 @@ const App = () => {
     setPlantName("No plant identified yet."); // Reset plant name
     setError(null); // Clear any previous errors
     try {
-      // Request access to the user's video camera
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      // Request access to the user's default (rear/environment) camera if available
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
+      });
       setStream(mediaStream); // Store the stream in state
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream; // Set the video element's source to the stream
         videoRef.current.play(); // Play the video
       }
     } catch (err) {
-      console.error("Error accessing camera:", err);
-      setError("Failed to access camera. Please ensure you have a camera connected and grant permissions.");
+      // Fallback to default camera if rear camera is not available
+      try {
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        setStream(fallbackStream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = fallbackStream;
+          videoRef.current.play();
+        }
+      } catch (fallbackErr) {
+        console.error("Error accessing camera:", fallbackErr);
+        setError("Failed to access camera. Please ensure you have a camera connected and grant permissions.");
+      }
     }
   };
 
@@ -470,14 +482,6 @@ Keep each bullet point to 1-2 sentences maximum. Be specific and practical.`;
               style={{ maxWidth: '100%', height: 'auto', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', margin: '0 auto', border: '1px solid #d1d5db' }}
               onError={(e) => { e.target.onerror = null; e.target.src="https://placehold.co/400x300/cccccc/333333?text=Image+Load+Error"; }}
             />
-            {photoDetails && (
-              <div style={{ marginTop: '12px', fontSize: '1rem', color: '#374151', background: '#f3f4f6', borderRadius: '8px', padding: '8px', display: 'inline-block' }}>
-                <div><strong>Photo Details:</strong></div>
-                <div>Name: {photoDetails.name}</div>
-                <div>Type: {photoDetails.type}</div>
-                <div>Size: {photoDetails.size} {photoDetails.name === 'Camera Capture' ? 'bytes (base64 length)' : 'bytes'}</div>
-              </div>
-            )}
           </div>
         )}
 
