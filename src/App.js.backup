@@ -2,199 +2,56 @@ import React, { useRef, useState, useEffect } from 'react';
 
 // Helper function to format agricultural info into categories and indentation
 function formatAgriDetails(text) {
-  console.log("formatAgriDetails called with:", text);
-  
-  if (!text || typeof text !== 'string') {
-    return <div style={{ color: '#92400e', padding: '12px' }}>Invalid agricultural data</div>;
-  }
-  
   const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
-  console.log("Lines found:", lines.length);
-  
   const categories = [
-    { 
-      key: ['CULTIVATION', 'Cultivation', 'cultivation'], 
-      color: '#166534', 
-      icon: '🌱',
-      title: 'Cultivation & Planting',
-      bgColor: '#f0fdf4'
-    },
-    { 
-      key: ['CARE', 'Care', 'care', 'MAINTENANCE', 'Maintenance', 'maintenance'], 
-      color: '#059669', 
-      icon: '🌿',
-      title: 'Care & Maintenance',
-      bgColor: '#ecfdf5'
-    },
-    { 
-      key: ['HARVESTING', 'Harvesting', 'harvesting', 'HARVEST', 'Harvest', 'harvest'], 
-      color: '#ca8a04', 
-      icon: '🌾',
-      title: 'Harvesting & Storage',
-      bgColor: '#fffbeb'
-    },
-    { 
-      key: ['GROWTH', 'Growth', 'growth', 'MATURATION', 'Maturation', 'maturation', 'SIZE', 'Size', 'size'], 
-      color: '#0c4a6e', 
-      icon: '📏',
-      title: 'Growth Information',
-      bgColor: '#f0f9ff'
-    },
-    { 
-      key: ['DISEASE', 'Disease', 'disease', 'PEST', 'Pest', 'pest', 'PROBLEM', 'Problem', 'problem', 'ISSUES', 'Issues', 'issues', 'COMMON', 'Common', 'common'], 
-      color: '#b91c1c', 
-      icon: '🦠',
-      title: 'Common Issues',
-      bgColor: '#fef2f2'
-    }
+    { key: 'Cultivating methods', color: '#166534' },
+    { key: 'Harvesting methods', color: '#166534' },
+    { key: 'Possible diseases', color: '#b91c1c' },
+    { key: 'Manure needed', color: '#92400e' },
+    { key: 'Time period for maturing', color: '#0c4a6e' }
   ];
-  
-  let sections = [];
-  let currentSection = null;
-  let currentContent = [];
-  
+  let elements = [];
+  let currentCat = null;
+  let buffer = [];
   lines.forEach((line, idx) => {
-    const trimmedLine = line.trim();
-    
-    // Check if this line is a section header
-    const foundCategory = categories.find(cat => 
-      cat.key.some(keyword => trimmedLine.includes(keyword) && (trimmedLine.includes('**') || trimmedLine.includes(':')))
-    );
-    
-    if (foundCategory) {
-      // Save previous section if exists
-      if (currentSection && currentContent.length > 0) {
-        sections.push({
-          category: currentSection,
-          content: currentContent.filter(c => c.trim() !== '')
-        });
+    const cat = categories.find(c => line.toLowerCase().includes(c.key.toLowerCase()));
+    if (cat) {
+      if (currentCat && buffer.length) {
+        elements.push(
+          <div key={currentCat.key + idx} style={{ marginLeft: '16px', marginBottom: '8px' }}>
+            <strong style={{ color: currentCat.color }}>{currentCat.key}:</strong>
+            <ul style={{ marginLeft: '16px' }}>
+              {buffer.map((b, i) => <li key={i}>{b.replace(/^[-•\s]+/, '')}</li>)}
+            </ul>
+          </div>
+        );
       }
-      
-      // Start new section
-      currentSection = foundCategory;
-      currentContent = [];
-    } else if (currentSection && trimmedLine.length > 0 && !trimmedLine.startsWith('**')) {
-      // Add content to current section (skip markdown headers)
-      currentContent.push(trimmedLine);
-    } else if (!currentSection && trimmedLine.length > 0) {
-      // Content without a specific section - try to categorize by keywords
-      const matchedCategory = categories.find(cat => 
-        cat.key.some(keyword => trimmedLine.toLowerCase().includes(keyword.toLowerCase()))
-      );
-      
-      if (matchedCategory) {
-        const existingSection = sections.find(s => s.category === matchedCategory);
-        if (existingSection) {
-          existingSection.content.push(trimmedLine);
-        } else {
-          sections.push({
-            category: matchedCategory,
-            content: [trimmedLine]
-          });
-        }
-      }
+      currentCat = cat;
+      buffer = [];
+      const rest = line.replace(new RegExp(cat.key, 'i'), '').trim();
+      if (rest) buffer.push(rest);
+    } else if (currentCat) {
+      buffer.push(line);
     }
   });
-  
-  // Add the last section
-  if (currentSection && currentContent.length > 0) {
-    sections.push({
-      category: currentSection,
-      content: currentContent.filter(c => c.trim() !== '')
-    });
-  }
-  
-  console.log("Sections created:", sections.length);
-  
-  if (sections.length === 0) {
-    // Fallback: display raw text in organized format
-    return (
-      <div style={{ 
-        padding: '16px', 
-        backgroundColor: '#f9fafb', 
-        borderRadius: '12px',
-        border: '2px solid #d1d5db'
-      }}>
-        <h4 style={{ color: '#92400e', marginBottom: '12px', fontSize: '1.1rem' }}>📋 Agricultural Information:</h4>
-        <div style={{ 
-          whiteSpace: 'pre-wrap', 
-          fontSize: '0.9rem', 
-          color: '#374151', 
-          lineHeight: '1.6',
-          margin: 0 
-        }}>
-          {text}
-        </div>
+  if (currentCat && buffer.length) {
+    elements.push(
+      <div key={currentCat.key + 'last'} style={{ marginLeft: '16px', marginBottom: '8px' }}>
+        <strong style={{ color: currentCat.color }}>{currentCat.key}:</strong>
+        <ul style={{ marginLeft: '16px' }}>
+          {buffer.map((b, i) => <li key={i}>{b.replace(/^[-•\s]+/, '')}</li>)}
+        </ul>
       </div>
     );
   }
-  
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {sections.map((section, idx) => (
-        <div key={`${section.category.title}-${idx}`} style={{ 
-          padding: '18px', 
-          borderRadius: '16px', 
-          backgroundColor: section.category.bgColor,
-          border: `3px solid ${section.category.color}40`,
-          boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
-          transition: 'transform 0.2s ease'
-        }}>
-          <h4 style={{ 
-            color: section.category.color, 
-            marginBottom: '14px', 
-            fontSize: '1.3rem', 
-            fontWeight: 'bold',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            borderBottom: `3px solid ${section.category.color}30`,
-            paddingBottom: '10px'
-          }}>
-            <span style={{ fontSize: '1.5rem' }}>{section.category.icon}</span>
-            {section.category.title}
-          </h4>
-          <div style={{ 
-            marginLeft: '4px'
-          }}>
-            {section.content.map((item, i) => {
-              const cleanItem = item.replace(/^[-•\s*]+/, '').trim();
-              return (
-                <div key={i} style={{ 
-                  marginBottom: '10px',
-                  padding: '10px 14px',
-                  fontSize: '0.95rem',
-                  lineHeight: '1.5',
-                  color: '#374151',
-                  backgroundColor: 'rgba(255,255,255,0.7)',
-                  borderRadius: '10px',
-                  borderLeft: `4px solid ${section.category.color}`,
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '10px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                }}>
-                  <span style={{ 
-                    color: section.category.color, 
-                    fontWeight: 'bold', 
-                    marginTop: '2px',
-                    fontSize: '1.1rem'
-                  }}>•</span>
-                  <span style={{ flex: 1, fontWeight: '500' }}>{cleanItem}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  if (elements.length === 0) {
+    return <pre style={{ whiteSpace: 'pre-wrap', fontSize: '1rem', color: '#92400e', margin: 0 }}>{text}</pre>;
+  }
+  return elements;
 }
 
 // Main App component
 const App = () => {
-  // Tab state for result display
-  const [activeTab, setActiveTab] = useState('name');
   // Refs for video and canvas elements
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -204,7 +61,7 @@ const App = () => {
   const [capturedImage, setCapturedImage] = useState(null); // Stores the captured image as base64
   const [photoDetails, setPhotoDetails] = useState(null); // Stores details about the photo
   const [plantName, setPlantName] = useState("No plant identified yet."); // Stores the identified plant name
-  // Removed plantDetails state, no longer needed
+  const [plantDetails, setPlantDetails] = useState(null); // Stores details about the identified plant
   const [agriDetails, setAgriDetails] = useState(null); // Stores agricultural info from Gemini
   const [loading, setLoading] = useState(false); // Indicates if an API call is in progress
   const [error, setError] = useState(null); // Stores any error messages
@@ -293,7 +150,7 @@ const App = () => {
     setLoading(true); // Set loading state to true
     setError(null); // Clear previous errors
     setPlantName("Identifying plant..."); // Update status message
-    // Removed plantDetails reset
+    setPlantDetails(null); // Clear previous plant details
 
     try {
       // Extract base64 data from the image URL (remove "data:image/png;base64,")
@@ -320,8 +177,8 @@ const App = () => {
         ],
       };
 
-      // Get API key from environment variable
-      const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+      // API key is left empty as it will be provided by the Canvas environment
+      const apiKey = "AIzaSyB-MAuRk0Ja7qZZmNP0hwKQ-55ofqk9kJE";
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
       // Make the API call to Gemini
@@ -341,67 +198,60 @@ const App = () => {
         const plant = text.trim();
         setPlantName(plant); // Set the identified plant name
 
-        // Ask Gemini for agricultural details
-        try {
-          const agriPrompt = `For the plant '${plant}', provide ONLY essential agricultural information in these exact categories. Keep each point concise and practical:
-
-**CULTIVATION:**
-- Best soil type and pH
-- Ideal planting season
-- Planting depth and spacing
-- Sun/shade requirements
-
-**CARE & MAINTENANCE:**
-- Watering frequency
-- Best fertilizer type
-- Pruning schedule
-- Common maintenance tips
-
-**HARVESTING:**
-- When to harvest (timing signs)
-- How to harvest properly
-- Storage method
-- Shelf life
-
-**GROWTH INFO:**
-- Time to maturity
-- Expected plant size
-- Growing season length
-
-**COMMON ISSUES:**
-- Top 2-3 diseases
-- Most common pests
-- Prevention tips
-
-Keep each bullet point to 1-2 sentences maximum. Be specific and practical.`;
-          const agriPayload = {
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  { text: agriPrompt }
-                ]
-              }
-            ]
-          };
-          const agriResponse = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(agriPayload)
-          });
-          const agriResult = await agriResponse.json();
-          if (agriResult.candidates && agriResult.candidates.length > 0 &&
-              agriResult.candidates[0].content && agriResult.candidates[0].content.parts &&
-              agriResult.candidates[0].content.parts.length > 0) {
-            setAgriDetails(agriResult.candidates[0].content.parts[0].text);
-          } else {
-            setAgriDetails('No agricultural details found.');
+        // Fetch plant details from Wikipedia API
+        if (plant && plant !== 'Unknown plant') {
+          try {
+            const wikiResponse = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(plant)}`);
+            if (wikiResponse.ok) {
+              const wikiData = await wikiResponse.json();
+              setPlantDetails({
+                title: wikiData.title,
+                description: wikiData.description,
+                extract: wikiData.extract,
+                image: wikiData.thumbnail ? wikiData.thumbnail.source : null,
+                url: wikiData.content_urls ? wikiData.content_urls.desktop.page : null
+              });
+            } else {
+              setPlantDetails({ error: 'No details found for this plant.' });
+            }
+          } catch (err) {
+            setPlantDetails({ error: 'Error fetching plant details.' });
           }
-        } catch (err) {
-          setAgriDetails('Error fetching agricultural details.');
+
+          // Ask Gemini for agricultural details
+          try {
+            const agriPrompt = `For the plant '${plant}', provide the following details in clear bullet points:\n- Cultivating methods\n- Harvesting methods\n- Possible diseases\n- Manure needed\n- Time period for maturing`;
+            const agriPayload = {
+              contents: [
+                {
+                  role: "user",
+                  parts: [
+                    { text: agriPrompt }
+                  ]
+                }
+              ]
+            };
+            const agriResponse = await fetch(apiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(agriPayload)
+            });
+            const agriResult = await agriResponse.json();
+            if (agriResult.candidates && agriResult.candidates.length > 0 &&
+                agriResult.candidates[0].content && agriResult.candidates[0].content.parts &&
+                agriResult.candidates[0].content.parts.length > 0) {
+              setAgriDetails(agriResult.candidates[0].content.parts[0].text);
+            } else {
+              setAgriDetails('No agricultural details found.');
+            }
+          } catch (err) {
+            setAgriDetails('Error fetching agricultural details.');
+          }
         }
+    setAgriDetails(null); // Clear previous agri details
       } else {
         setPlantName("Could not identify the plant. Please try again with a clearer image.");
+        setPlantDetails(null);
         console.error("Unexpected API response structure:", result);
       }
     } catch (err) {
@@ -481,61 +331,38 @@ Keep each bullet point to 1-2 sentences maximum. Be specific and practical.`;
           </div>
         )}
 
-        {/* Result Tabs */}
+        {/* Result Display */}
         <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #bbf7d0', marginBottom: '8px' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#166534', marginBottom: '8px' }}>Identification Result:</h2>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button onClick={() => setActiveTab('name')} style={{ padding: '10px 16px', borderRadius: '8px', border: activeTab === 'name' ? '3px solid #166534' : '2px solid #d1d5db', background: activeTab === 'name' ? '#bbf7d0' : '#fff', color: '#166534', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', minWidth: '80px' }}>
-              🏷️ Name
-            </button>
-            <button onClick={() => setActiveTab('agri')} style={{ padding: '10px 16px', borderRadius: '8px', border: activeTab === 'agri' ? '3px solid #92400e' : '2px solid #d1d5db', background: activeTab === 'agri' ? '#fef9c3' : '#fff', color: '#92400e', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', minWidth: '120px' }}>
-              🌾 Agricultural Info
-            </button>
-            <button onClick={() => setActiveTab('error')} style={{ padding: '10px 16px', borderRadius: '8px', border: activeTab === 'error' ? '3px solid #b91c1c' : '2px solid #d1d5db', background: activeTab === 'error' ? '#fee2e2' : '#fff', color: '#b91c1c', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', minWidth: '80px' }}>
-              ⚠️ Error
-            </button>
+          <div style={{ marginBottom: '16px', textAlign: 'left' }}>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#14532d', marginBottom: '8px' }}>Name</h3>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#14532d', wordBreak: 'break-word', marginBottom: '16px', marginLeft: '16px' }}>{plantName}</div>
           </div>
-          {/* Tab Content */}
-          {activeTab === 'name' && (
-            <div style={{ marginBottom: '16px', textAlign: 'left' }}>
-              <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#14532d', marginBottom: '8px' }}>Name</h3>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#14532d', wordBreak: 'break-word', marginBottom: '16px', marginLeft: '16px' }}>
-                {plantName || "No plant identified yet."}
-              </div>
+          {agriDetails && (
+            <div style={{ marginBottom: '16px', textAlign: 'left', background: '#fef9c3', borderRadius: '8px', padding: '12px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#92400e', marginBottom: '8px' }}>Agricultural Info</h3>
+              {formatAgriDetails(agriDetails)}
             </div>
           )}
-          {activeTab === 'agri' && (
-            <div style={{ marginBottom: '16px', textAlign: 'left' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#92400e', marginBottom: '12px', textAlign: 'center' }}>
-                🌿 Agricultural Information
-              </h3>
-              {agriDetails ? (
-                <div>
-                  <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '8px', textAlign: 'center' }}>
-                    Debug: Raw data length: {agriDetails.length} characters
-                  </p>
-                  <div>
-                    {formatAgriDetails(agriDetails)}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ 
-                    color: '#92400e', 
-                    textAlign: 'center', 
-                    padding: '20px',
-                    fontStyle: 'italic'
-                  }}>
-                    No agricultural info available.
+          {plantDetails && !plantDetails.error && (
+            <div style={{ marginTop: '0', textAlign: 'left', background: '#e0f2fe', borderRadius: '8px', padding: '12px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#0c4a6e', marginBottom: '8px' }}>Plant Details</h3>
+              {plantDetails.image && (
+                <img src={plantDetails.image} alt={plantDetails.title} style={{ maxWidth: '120px', borderRadius: '8px', marginBottom: '8px' }} />
+              )}
+              <div><strong>{plantDetails.title}</strong></div>
+              <div style={{ fontStyle: 'italic', marginBottom: '8px' }}>{plantDetails.description}</div>
+              <div>{plantDetails.extract}</div>
+              {plantDetails.url && (
+                <div style={{ marginTop: '8px' }}>
+                  <a href={plantDetails.url} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'underline' }}>Read more on Wikipedia</a>
                 </div>
               )}
             </div>
           )}
-          {activeTab === 'error' && (
+          {plantDetails && plantDetails.error && (
             <div style={{ marginTop: '16px', color: '#b91c1c', background: '#fee2e2', borderRadius: '8px', padding: '8px' }}>
-              {error
-                ? error
-                : "No error information available."
-              }
+              {plantDetails.error}
             </div>
           )}
         </div>
