@@ -49,101 +49,77 @@ function formatAgriDetails(text) {
     }
   ];
   
-  let sections = [];
-  let currentSection = null;
-  let currentContent = [];
-  
-  lines.forEach((line, idx) => {
+  // Merge repeated categories into a single box
+  let mergedSections = [];
+  lines.forEach((line) => {
     const trimmedLine = line.trim();
-    
-    // Check if this line is a section header
-    const foundCategory = categories.find(cat => 
+    const foundCategory = categories.find(cat =>
       cat.key.some(keyword => trimmedLine.includes(keyword) && (trimmedLine.includes('**') || trimmedLine.includes(':')))
     );
-    
+    let contentLine = null;
     if (foundCategory) {
-      // Save previous section if exists
-      if (currentSection && currentContent.length > 0) {
-        sections.push({
-          category: currentSection,
-          content: currentContent.filter(c => c.trim() !== '')
-        });
-      }
-      
-      // Start new section
-      currentSection = foundCategory;
-      currentContent = [];
-    } else if (currentSection && trimmedLine.length > 0 && !trimmedLine.startsWith('**')) {
-      // Add content to current section (skip markdown headers)
-      currentContent.push(trimmedLine);
-    } else if (!currentSection && trimmedLine.length > 0) {
-      // Content without a specific section - try to categorize by keywords
-      const matchedCategory = categories.find(cat => 
+      contentLine = trimmedLine;
+    } else if (trimmedLine.length > 0 && !trimmedLine.startsWith('**')) {
+      // Try to categorize by keywords
+      const matchedCategory = categories.find(cat =>
         cat.key.some(keyword => trimmedLine.toLowerCase().includes(keyword.toLowerCase()))
       );
-      
       if (matchedCategory) {
-        const existingSection = sections.find(s => s.category === matchedCategory);
-        if (existingSection) {
-          existingSection.content.push(trimmedLine);
-        } else {
-          sections.push({
-            category: matchedCategory,
-            content: [trimmedLine]
-          });
+        contentLine = trimmedLine;
+      }
+    }
+    if (contentLine) {
+      // Find if this category already exists
+      const cat = foundCategory || categories.find(cat =>
+        cat.key.some(keyword => trimmedLine.toLowerCase().includes(keyword.toLowerCase()))
+      );
+      if (cat) {
+        let section = mergedSections.find(s => s.category.title === cat.title);
+        if (!section) {
+          section = { category: cat, content: [] };
+          mergedSections.push(section);
         }
+        section.content.push(trimmedLine);
       }
     }
   });
-  
-  // Add the last section
-  if (currentSection && currentContent.length > 0) {
-    sections.push({
-      category: currentSection,
-      content: currentContent.filter(c => c.trim() !== '')
-    });
-  }
-  
-  console.log("Sections created:", sections.length);
-  
-  if (sections.length === 0) {
+  if (mergedSections.length === 0) {
     // Fallback: display raw text in organized format
     return (
-      <div style={{ 
-        padding: '16px', 
-        backgroundColor: '#f9fafb', 
+      <div style={{
+        padding: '16px',
+        backgroundColor: '#f9fafb',
         borderRadius: '12px',
         border: '2px solid #d1d5db'
       }}>
         <h4 style={{ color: '#92400e', marginBottom: '12px', fontSize: '1.1rem' }}>📋 Agricultural Information:</h4>
-        <div style={{ 
-          whiteSpace: 'pre-wrap', 
-          fontSize: '0.9rem', 
-          color: '#374151', 
+        <div style={{
+          whiteSpace: 'pre-wrap',
+          fontSize: '0.9rem',
+          color: '#374151',
           lineHeight: '1.6',
-          margin: 0 
+          margin: 0
         }}>
           {text}
         </div>
       </div>
     );
   }
-  
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {sections.map((section, idx) => (
-        <div key={`${section.category.title}-${idx}`} style={{ 
-          padding: '18px', 
-          borderRadius: '16px', 
+      {mergedSections.map((section, idx) => (
+        <div key={`${section.category.title}-${idx}`} style={{
+          padding: '18px',
+          borderRadius: '16px',
           backgroundColor: section.category.bgColor,
           border: `3px solid ${section.category.color}40`,
           boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
           transition: 'transform 0.2s ease'
         }}>
-          <h4 style={{ 
-            color: section.category.color, 
-            marginBottom: '14px', 
-            fontSize: '1.3rem', 
+          <h4 style={{
+            color: section.category.color,
+            marginBottom: '14px',
+            fontSize: '1.3rem',
             fontWeight: 'bold',
             display: 'flex',
             alignItems: 'center',
@@ -154,9 +130,7 @@ function formatAgriDetails(text) {
             <span style={{ fontSize: '1.5rem' }}>{section.category.icon}</span>
             {section.category.title}
           </h4>
-          <div style={{ 
-            marginLeft: '4px'
-          }}>
+          <div style={{ marginLeft: '4px' }}>
             {section.content.map((item, i) => {
               // Remove all asterisks (single/double) and bullets from anywhere in the line
               const cleanItem = item.replace(/\*+/g, '').replace(/^\s*(?:•|\-|–|—)+\s*/, '').trim();
@@ -169,7 +143,7 @@ function formatAgriDetails(text) {
                 rest = cleanItem.slice(colonIdx + 1).trim();
               }
               return (
-                <div key={i} style={{ 
+                <div key={i} style={{
                   marginBottom: '10px',
                   padding: '10px 14px',
                   fontSize: '0.95rem',
@@ -183,9 +157,9 @@ function formatAgriDetails(text) {
                   gap: '10px',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
                 }}>
-                  <span style={{ 
-                    color: section.category.color, 
-                    fontWeight: 'bold', 
+                  <span style={{
+                    color: section.category.color,
+                    fontWeight: 'bold',
                     marginTop: '2px',
                     fontSize: '1.1rem'
                   }}>•</span>
