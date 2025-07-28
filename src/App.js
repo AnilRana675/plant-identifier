@@ -116,8 +116,17 @@ function formatAgriDetails(text) {
           // If only a label and no rest, skip
           const colonIdx = cleanItem.indexOf(':');
           if (colonIdx > 0) {
+            const label = cleanItem.slice(0, colonIdx).trim();
             const rest = cleanItem.slice(colonIdx + 1).trim();
+            // Skip if label is a category name and rest is empty
             if (!rest) return false;
+            // Skip if label matches a category title and rest is empty
+            const isCategoryLabel = categories.some(cat => cat.title.toLowerCase().includes(label.toLowerCase()));
+            if (isCategoryLabel && !rest) return false;
+          } else {
+            // If no colon, skip if matches a category title
+            const isCategoryLabel = categories.some(cat => cat.title.toLowerCase().includes(cleanItem.toLowerCase()));
+            if (isCategoryLabel) return false;
           }
           return true;
         });
