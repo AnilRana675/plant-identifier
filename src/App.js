@@ -107,73 +107,87 @@ function formatAgriDetails(text) {
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {mergedSections.map((section, idx) => (
-        <div key={`${section.category.title}-${idx}`} style={{
-          padding: '18px',
-          borderRadius: '16px',
-          backgroundColor: section.category.bgColor,
-          border: `3px solid ${section.category.color}40`,
-          boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
-          transition: 'transform 0.2s ease'
-        }}>
-          <h4 style={{
-            color: section.category.color,
-            marginBottom: '14px',
-            fontSize: '1.3rem',
-            fontWeight: 'bold',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            borderBottom: `3px solid ${section.category.color}30`,
-            paddingBottom: '10px'
+      {mergedSections.map((section, idx) => {
+        // Filter out empty or header-only lines
+        const filteredContent = section.content.filter(item => {
+          const cleanItem = item.replace(/\*+/g, '').replace(/^\s*(?:•|\-|–|—)+\s*/, '').trim();
+          // Remove lines that are just category headers or empty after cleaning
+          if (!cleanItem) return false;
+          // If only a label and no rest, skip
+          const colonIdx = cleanItem.indexOf(':');
+          if (colonIdx > 0) {
+            const rest = cleanItem.slice(colonIdx + 1).trim();
+            if (!rest) return false;
+          }
+          return true;
+        });
+        if (filteredContent.length === 0) return null;
+        return (
+          <div key={`${section.category.title}-${idx}`} style={{
+            padding: '18px',
+            borderRadius: '16px',
+            backgroundColor: section.category.bgColor,
+            border: `3px solid ${section.category.color}40`,
+            boxShadow: '0 4px 6px rgba(0,0,0,0.07)',
+            transition: 'transform 0.2s ease'
           }}>
-            <span style={{ fontSize: '1.5rem' }}>{section.category.icon}</span>
-            {section.category.title}
-          </h4>
-          <div style={{ marginLeft: '4px' }}>
-            {section.content.map((item, i) => {
-              // Remove all asterisks (single/double) and bullets from anywhere in the line
-              const cleanItem = item.replace(/\*+/g, '').replace(/^\s*(?:•|\-|–|—)+\s*/, '').trim();
-              // Bold only the main label (e.g., 'Climate') before the first colon
-              let label = '';
-              let rest = cleanItem;
-              const colonIdx = cleanItem.indexOf(':');
-              if (colonIdx > 0) {
-                label = cleanItem.slice(0, colonIdx).trim();
-                rest = cleanItem.slice(colonIdx + 1).trim();
-              }
-              return (
-                <div key={i} style={{
-                  marginBottom: '10px',
-                  padding: '10px 14px',
-                  fontSize: '0.95rem',
-                  lineHeight: '1.5',
-                  color: '#374151',
-                  backgroundColor: 'rgba(255,255,255,0.7)',
-                  borderRadius: '10px',
-                  borderLeft: `4px solid ${section.category.color}`,
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '10px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                }}>
-                  <span style={{
-                    color: section.category.color,
-                    fontWeight: 'bold',
-                    marginTop: '2px',
-                    fontSize: '1.1rem'
-                  }}>•</span>
-                  <span style={{ flex: 1 }}>
-                    {label ? <span style={{ fontWeight: 'bold', color: '#92400e' }}>{label}</span> : null}
-                    {label ? <span>: </span> : null}
-                    <span style={{ fontWeight: '500' }}>{rest}</span>
-                  </span>
-                </div>
-              );
-            })}
+            <h4 style={{
+              color: section.category.color,
+              marginBottom: '14px',
+              fontSize: '1.3rem',
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              borderBottom: `3px solid ${section.category.color}30`,
+              paddingBottom: '10px'
+            }}>
+              <span style={{ fontSize: '1.5rem' }}>{section.category.icon}</span>
+              {section.category.title}
+            </h4>
+            <div style={{ marginLeft: '4px' }}>
+              {filteredContent.map((item, i) => {
+                const cleanItem = item.replace(/\*+/g, '').replace(/^\s*(?:•|\-|–|—)+\s*/, '').trim();
+                let label = '';
+                let rest = cleanItem;
+                const colonIdx = cleanItem.indexOf(':');
+                if (colonIdx > 0) {
+                  label = cleanItem.slice(0, colonIdx).trim();
+                  rest = cleanItem.slice(colonIdx + 1).trim();
+                }
+                return (
+                  <div key={i} style={{
+                    marginBottom: '10px',
+                    padding: '10px 14px',
+                    fontSize: '0.95rem',
+                    lineHeight: '1.5',
+                    color: '#374151',
+                    backgroundColor: 'rgba(255,255,255,0.7)',
+                    borderRadius: '10px',
+                    borderLeft: `4px solid ${section.category.color}`,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                  }}>
+                    <span style={{
+                      color: section.category.color,
+                      fontWeight: 'bold',
+                      marginTop: '2px',
+                      fontSize: '1.1rem'
+                    }}>•</span>
+                    <span style={{ flex: 1 }}>
+                      {label ? <span style={{ fontWeight: 'bold', color: '#92400e' }}>{label}</span> : null}
+                      {label ? <span>: </span> : null}
+                      <span style={{ fontWeight: '500' }}>{rest}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
