@@ -158,7 +158,16 @@ function formatAgriDetails(text) {
             marginLeft: '4px'
           }}>
             {section.content.map((item, i) => {
-              const cleanItem = item.replace(/^[-•\s*]+/, '').trim();
+              // Remove all asterisks (single/double) and bullets from anywhere in the line
+              const cleanItem = item.replace(/\*+/g, '').replace(/^\s*(?:•|\-|–|—)+\s*/, '').trim();
+              // Bold only the main label (e.g., 'Climate') before the first colon
+              let label = '';
+              let rest = cleanItem;
+              const colonIdx = cleanItem.indexOf(':');
+              if (colonIdx > 0) {
+                label = cleanItem.slice(0, colonIdx).trim();
+                rest = cleanItem.slice(colonIdx + 1).trim();
+              }
               return (
                 <div key={i} style={{ 
                   marginBottom: '10px',
@@ -180,7 +189,11 @@ function formatAgriDetails(text) {
                     marginTop: '2px',
                     fontSize: '1.1rem'
                   }}>•</span>
-                  <span style={{ flex: 1, fontWeight: '500' }}>{cleanItem}</span>
+                  <span style={{ flex: 1 }}>
+                    {label ? <span style={{ fontWeight: 'bold', color: '#92400e' }}>{label}</span> : null}
+                    {label ? <span>: </span> : null}
+                    <span style={{ fontWeight: '500' }}>{rest}</span>
+                  </span>
                 </div>
               );
             })}
@@ -193,64 +206,17 @@ function formatAgriDetails(text) {
 
 // Main App component
 const App = () => {
-  // Tab state for result display
+  // State and function definitions
   const [activeTab, setActiveTab] = useState('name');
-  // Refs for video and canvas elements
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [plantName, setPlantName] = useState('No plant identified yet.');
+  const [plantScientificName, setPlantScientificName] = useState('');
+  const [plantCommonName, setPlantCommonName] = useState('');
+  const [agriDetails, setAgriDetails] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // State variables for managing the application's data and UI
-  const [stream, setStream] = useState(null); // Stores the camera stream
-  const [capturedImage, setCapturedImage] = useState(null); // Stores the captured image as base64
-  const [photoDetails, setPhotoDetails] = useState(null); // Stores details about the photo
-  const [plantName, setPlantName] = useState("No plant identified yet."); // Stores the identified plant name
-  // Removed plantDetails state, no longer needed
-  const [agriDetails, setAgriDetails] = useState(null); // Stores agricultural info from Gemini
-  const [loading, setLoading] = useState(false); // Indicates if an API call is in progress
-  const [error, setError] = useState(null); // Stores any error messages
-
-  // Effect hook to clean up the camera stream when the component unmounts
-  useEffect(() => {
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop()); // Stop all tracks in the stream
-      }
-    };
-  }, [stream]); // Re-run effect if stream changes
-
-  // Function to start the camera
-  const startCamera = async () => {
-    setCapturedImage(null); // Clear any previously captured image
-    setPlantName("No plant identified yet."); // Reset plant name
-    setError(null); // Clear any previous errors
-    try {
-      // Request access to the user's default (rear/environment) camera if available
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
-      });
-      setStream(mediaStream); // Store the stream in state
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream; // Set the video element's source to the stream
-        videoRef.current.play(); // Play the video
-      }
-    } catch (err) {
-      // Fallback to default camera if rear camera is not available
-      try {
-        const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        setStream(fallbackStream);
-        if (videoRef.current) {
-          videoRef.current.srcObject = fallbackStream;
-          videoRef.current.play();
-        }
-      } catch (fallbackErr) {
-        console.error("Error accessing camera:", fallbackErr);
-        setError("Failed to access camera. Please ensure you have a camera connected and grant permissions.");
-      }
-    }
-  };
-
-  // Function to take a photo from the video feed
-  // Function to handle image upload from device
+  // Handles image upload from file input
   const handleImageUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -259,252 +225,250 @@ const App = () => {
         setCapturedImage(reader.result);
         setPlantName("Image uploaded. Click 'Identify Plant' to get the name.");
         setError(null);
-        setPhotoDetails({
-          name: file.name,
-          type: file.type,
-          size: file.size
-        });
       };
       reader.readAsDataURL(file);
     }
   };
-  const takePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
 
-      // Set canvas dimensions to match the video feed
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      const context = canvas.getContext('2d');
-      // Draw the current video frame onto the canvas
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // Get the image data as a base64 encoded PNG
-      const imageData = canvas.toDataURL('image/png');
-      setCapturedImage(imageData); // Store the captured image
-      setPlantName("Image captured. Click 'Identify Plant' to get the name."); // Update status message
-      setPhotoDetails({
-        name: 'Camera Capture',
-        type: 'image/png',
-        size: imageData.length // base64 string length
-      });
-    } else {
-      setError("Camera not active. Please start the camera first.");
-    }
-  };
-
-  // Function to identify the plant using the Gemini API
+  // Function to identify the plant using Plant.id, Pl@ntNet, and Gemini APIs
   const identifyPlant = async () => {
     if (!capturedImage) {
       setError("No image captured. Please take a photo first.");
       return;
     }
-
-    setLoading(true); // Set loading state to true
-    setError(null); // Clear previous errors
-    setPlantName("Identifying plant..."); // Update status message
-    // Removed plantDetails reset
-
+    setLoading(true);
+    setError(null);
+    setPlantName("Identifying plant...");
     try {
       // Extract base64 data from the image URL (remove "data:image/png;base64,")
       const base64ImageData = capturedImage.split(',')[1];
 
-      let chatHistory = [];
-      const prompt = "Identify the plant in this image. Provide only the common name of the plant, or 'Unknown plant' if you cannot identify it. Do not include any other text or explanation.";
-      chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+      // --- 1. Plant.id API ---
+      const plantIdApiKey = process.env.REACT_APP_PLANT_ID_API_KEY;
+      const plantIdUrl = "https://api.plant.id/v2/identify";
+      const plantIdPayload = {
+        images: [base64ImageData],
+        modifiers: ["crops_fast", "similar_images"],
+        plant_language: "en",
+        plant_details: [
+          "common_names",
+          "url",
+          "name_authority",
+          "wiki_description",
+          "taxonomy",
+          "synonyms"
+        ]
+      };
+      const plantIdResponse = await fetch(plantIdUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Api-Key": plantIdApiKey
+        },
+        body: JSON.stringify(plantIdPayload)
+      });
+      const plantIdResult = await plantIdResponse.json();
 
-      const payload = {
+      let plantIdInfo = "";
+      let plantIdName = "";
+      let plantIdScientific = "";
+      let plantIdCommon = "";
+      if (plantIdResult && plantIdResult.suggestions && plantIdResult.suggestions.length > 0) {
+        const bestSuggestion = plantIdResult.suggestions[0];
+        plantIdScientific = bestSuggestion.plant_name || '';
+        plantIdCommon = bestSuggestion.plant_details?.common_names?.[0] || '';
+        plantIdName = plantIdScientific || plantIdCommon || "Unknown plant";
+        plantIdInfo += `Plant.id Name: ${plantIdName}\n`;
+        if (bestSuggestion.plant_details) {
+          const details = bestSuggestion.plant_details;
+          if (details.common_names && details.common_names.length > 0) {
+            plantIdInfo += `Common Names: ${details.common_names.join(", ")}\n`;
+          }
+          if (details.taxonomy) {
+            plantIdInfo += `Taxonomy: ${Object.entries(details.taxonomy).map(([k,v]) => `${k}: ${v}`).join(", ")}\n`;
+          }
+          if (details.wiki_description && details.wiki_description.value) {
+            plantIdInfo += `Wiki: ${details.wiki_description.value}\n`;
+          }
+          if (details.synonyms && details.synonyms.length > 0) {
+            plantIdInfo += `Synonyms: ${details.synonyms.join(", ")}\n`;
+          }
+          if (details.url) {
+            plantIdInfo += `More info: ${details.url}\n`;
+          }
+        }
+      }
+
+      // --- 2. Pl@ntNet API ---
+      const plantNetApiKey = process.env.REACT_APP_PLANTNET_API_KEY;
+      const plantNetUrl = `https://my-api.plantnet.org/v2/identify/all?api-key=${plantNetApiKey}`;
+      const plantNetPayload = new FormData();
+      function base64ToBlob(base64, type = 'image/png') {
+        const byteString = atob(base64);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+          ia[i] = byteString.charCodeAt(i);
+        }
+        return new Blob([ab], { type });
+      }
+      const imageBlob = base64ToBlob(base64ImageData);
+      plantNetPayload.append('images', imageBlob, 'photo.png');
+      let plantNetInfo = "";
+      let plantNetName = "";
+      let plantNetScientific = "";
+      let plantNetCommon = "";
+      try {
+        const plantNetResponse = await fetch(plantNetUrl, {
+          method: "POST",
+          body: plantNetPayload
+        });
+        const plantNetResult = await plantNetResponse.json();
+        if (plantNetResult && plantNetResult.results && plantNetResult.results.length > 0) {
+          const bestNet = plantNetResult.results[0];
+          plantNetScientific = bestNet.species?.scientificNameWithoutAuthor || '';
+          plantNetCommon = bestNet.species?.commonNames?.[0] || '';
+          plantNetName = plantNetScientific || plantNetCommon || "Unknown";
+          plantNetInfo += `Pl@ntNet Name: ${plantNetName}\n`;
+          if (bestNet.species?.commonNames && bestNet.species.commonNames.length > 0) {
+            plantNetInfo += `Common Names: ${bestNet.species.commonNames.join(", ")}\n`;
+          }
+          if (bestNet.species?.family?.scientificName) {
+            plantNetInfo += `Family: ${bestNet.species.family.scientificName}\n`;
+          }
+          if (bestNet.species?.genus?.scientificName) {
+            plantNetInfo += `Genus: ${bestNet.species.genus.scientificName}\n`;
+          }
+        }
+      } catch (err) {
+        plantNetInfo += "Pl@ntNet API error.\n";
+      }
+
+      // --- 3. Feed combined info to Gemini ---
+      // Compose both scientific and common names for display
+      let displayScientific = plantIdScientific || plantNetScientific;
+      let displayCommon = plantIdCommon || plantNetCommon;
+      setPlantScientificName(displayScientific);
+      setPlantCommonName(displayCommon);
+      setPlantName(`${displayScientific}${displayCommon ? ' / ' + displayCommon : ''}`);
+      const geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY;
+      const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+      const geminiPrompt = `Given the following plant identification results from Plant.id and Pl@ntNet, provide a concise, practical agricultural guide for this plant. Use the info below:\n${plantIdInfo}\n${plantNetInfo}\n\nFormat the result in these categories: Cultivation, Care & Maintenance, Harvesting, Growth Info, Common Issues. Use bullet points, keep each point short and practical.`;
+      const geminiPayload = {
         contents: [
           {
             role: "user",
             parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: "image/png",
-                  data: base64ImageData
-                }
-              }
+              { text: geminiPrompt }
             ]
           }
-        ],
+        ]
       };
-
-      // Get API key from environment variable
-      const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-      // Make the API call to Gemini
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const result = await response.json();
-
-      // Check if the response contains the identified plant name
-      if (result.candidates && result.candidates.length > 0 &&
-          result.candidates[0].content && result.candidates[0].content.parts &&
-          result.candidates[0].content.parts.length > 0) {
-        const text = result.candidates[0].content.parts[0].text;
-        const plant = text.trim();
-        setPlantName(plant); // Set the identified plant name
-
-        // Ask Gemini for agricultural details
-        try {
-          const agriPrompt = `For the plant '${plant}', provide ONLY essential agricultural information in these exact categories. Keep each point concise and practical:
-
-**CULTIVATION:**
-- Best soil type and pH
-- Ideal planting season
-- Planting depth and spacing
-- Sun/shade requirements
-
-**CARE & MAINTENANCE:**
-- Watering frequency
-- Best fertilizer type
-- Pruning schedule
-- Common maintenance tips
-
-**HARVESTING:**
-- When to harvest (timing signs)
-- How to harvest properly
-- Storage method
-- Shelf life
-
-**GROWTH INFO:**
-- Time to maturity
-- Expected plant size
-- Growing season length
-
-**COMMON ISSUES:**
-- Top 2-3 diseases
-- Most common pests
-- Prevention tips
-
-Keep each bullet point to 1-2 sentences maximum. Be specific and practical.`;
-          const agriPayload = {
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  { text: agriPrompt }
-                ]
-              }
-            ]
-          };
-          const agriResponse = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(agriPayload)
-          });
-          const agriResult = await agriResponse.json();
-          if (agriResult.candidates && agriResult.candidates.length > 0 &&
-              agriResult.candidates[0].content && agriResult.candidates[0].content.parts &&
-              agriResult.candidates[0].content.parts.length > 0) {
-            setAgriDetails(agriResult.candidates[0].content.parts[0].text);
-          } else {
-            setAgriDetails('No agricultural details found.');
-          }
-        } catch (err) {
-          setAgriDetails('Error fetching agricultural details.');
+      let geminiResultText = "";
+      try {
+        const geminiResponse = await fetch(geminiApiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(geminiPayload)
+        });
+        const geminiResult = await geminiResponse.json();
+        if (geminiResult.candidates && geminiResult.candidates.length > 0 &&
+            geminiResult.candidates[0].content && geminiResult.candidates[0].content.parts &&
+            geminiResult.candidates[0].content.parts.length > 0) {
+          geminiResultText = geminiResult.candidates[0].content.parts[0].text;
+        } else {
+          geminiResultText = "No agricultural details found.";
         }
-      } else {
-        setPlantName("Could not identify the plant. Please try again with a clearer image.");
-        console.error("Unexpected API response structure:", result);
+      } catch (err) {
+        geminiResultText = "Error fetching agricultural details from Gemini.";
       }
+      setAgriDetails(geminiResultText);
     } catch (err) {
       console.error("Error identifying plant:", err);
       setError("An error occurred during identification. Please try again.");
       setPlantName("Identification failed.");
+      setAgriDetails(null);
     } finally {
-      setLoading(false); // Set loading state to false
+      setLoading(false);
     }
   };
-
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(to bottom right, #e6ffe6, #e6f7ff)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif', padding: '16px' }}>
-      <div style={{ background: '#fff', padding: '32px', borderRadius: '16px', boxShadow: '0 4px 24px rgba(0,0,0,0.08)', maxWidth: '600px', width: '100%', textAlign: 'center', border: '2px solid #6ee7b7' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#15803d', marginBottom: '24px', letterSpacing: '-1px' }}>
-          🌿 Plant Identifier
-        </h1>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(120deg, #bbf7d0 0%, #f0fdf4 100%)', padding: '0', fontFamily: 'Inter, Arial, sans-serif' }}>
+      {/* Header */}
+      <header style={{ width: '100%', padding: '32px 0 24px 0', background: 'linear-gradient(90deg, #22c55e 0%, #3b82f6 100%)', color: '#fff', textAlign: 'center', boxShadow: '0 4px 24px rgba(34,197,94,0.10)' }}>
+        <span style={{ fontSize: '2.5rem', marginRight: '12px', verticalAlign: 'middle' }}>🌿</span>
+        <span style={{ fontSize: '2rem', fontWeight: 'bold', letterSpacing: '1px', verticalAlign: 'middle' }}>Plant Identifier</span>
+        <div style={{ fontSize: '1.1rem', marginTop: '8px', opacity: 0.85 }}>Snap, identify, and grow smarter!</div>
+      </header>
 
-        {/* Controls Section: Only file input for camera */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '100%',
-            marginBottom: '8px'
-          }}>
-            <div style={{
-              background: 'linear-gradient(120deg, #f0fdf4 0%, #dbeafe 100%)',
-              borderRadius: '18px',
-              boxShadow: '0 6px 24px rgba(34,197,94,0.10)',
-              padding: '32px 18px',
-              border: '2px solid #bbf7d0',
-              width: '100%',
-              maxWidth: '400px',
-              cursor: 'pointer',
-              transition: 'box-shadow 0.2s',
-              position: 'relative',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto'
-            }}>
-              <label htmlFor="camera-upload" style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
+      {/* Add extra margin below header to separate main card */}
+      <div style={{ height: '32px' }}></div>
+
+      <main style={{ maxWidth: '600px', margin: '0 auto', marginTop: '0', background: '#fff', borderRadius: '24px', boxShadow: '0 8px 32px rgba(34,197,94,0.10)', padding: '36px 28px 24px 28px', border: '2px solid #bbf7d0', position: 'relative', zIndex: 2 }}>
+        {/* Camera and Upload UI */}
+        <div style={{ marginBottom: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ width: '100%', textAlign: 'center', background: 'linear-gradient(90deg, #f0fdf4 0%, #bbf7d0 100%)', borderRadius: '18px', boxShadow: '0 2px 12px rgba(34,197,94,0.07)', padding: '24px 0 18px 0', border: '1.5px solid #bbf7d0', marginBottom: '18px' }}>
+            <span style={{ fontSize: '3.2rem', color: '#22c55e', marginBottom: '10px', display: 'block' }}>📷</span>
+            <span style={{ fontWeight: 'bold', fontSize: '1.35rem', color: '#14532d', marginBottom: '8px', letterSpacing: '0.5px', display: 'block' }}>Take a Photo</span>
+            <span style={{ fontSize: '1.05rem', color: '#374151', marginBottom: '12px', fontWeight: '500', textAlign: 'center', display: 'block' }}>Use your device camera to identify a plant</span>
+            <input
+              id="camera-upload"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleImageUpload}
+              style={{ display: 'none' }}
+            />
+            <span
+              style={{
+                background: 'linear-gradient(90deg, #22c55e 0%, #3b82f6 100%)',
+                color: '#fff',
+                fontWeight: 'bold',
+                fontSize: '1.15rem',
+                padding: '13px 32px',
+                borderRadius: '999px',
+                boxShadow: '0 2px 8px rgba(34,197,94,0.13)',
+                marginTop: '12px',
+                border: 'none',
+                letterSpacing: '0.5px',
+                textAlign: 'center',
+                userSelect: 'none',
                 cursor: 'pointer',
-                width: '100%'
-              }}>
-                <span style={{ fontSize: '3rem', color: '#22c55e', marginBottom: '10px' }}>📷</span>
-                <span style={{ fontWeight: 'bold', fontSize: '1.25rem', color: '#14532d', marginBottom: '6px', letterSpacing: '0.5px' }}>Take a Photo</span>
-                <span style={{ fontSize: '1rem', color: '#374151', marginBottom: '10px', fontWeight: '500', textAlign: 'center' }}>Use your device camera to identify a plant</span>
-                <input
-                  id="camera-upload"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleImageUpload}
-                  style={{ display: 'none' }}
-                />
-                <span style={{
-                  background: 'linear-gradient(90deg, #22c55e 0%, #3b82f6 100%)',
-                  color: '#fff',
-                  fontWeight: 'bold',
-                  fontSize: '1.1rem',
-                  padding: '12px 28px',
-                  borderRadius: '999px',
-                  boxShadow: '0 2px 8px rgba(34,197,94,0.10)',
-                  marginTop: '10px',
-                  border: 'none',
-                  letterSpacing: '0.5px',
-                  textAlign: 'center',
-                  userSelect: 'none',
-                  cursor: 'pointer',
-                  display: 'inline-block'
-                }}
-                  onClick={() => document.getElementById('camera-upload').click()}
-                >
-                  <span style={{ fontSize: '1.3rem', marginRight: '8px', verticalAlign: 'middle' }}>📸</span>
-                  Open Camera
-                </span>
-              </label>
-            </div>
+                display: 'inline-block',
+                transition: 'transform 0.15s',
+              }}
+              onClick={() => document.getElementById('camera-upload').click()}
+              onMouseDown={e => e.currentTarget.style.transform = 'scale(0.97)'}
+              onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+              onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              <span style={{ fontSize: '1.3rem', marginRight: '8px', verticalAlign: 'middle' }}>📸</span>
+              Open Camera
+            </span>
           </div>
           <button
             onClick={identifyPlant}
             disabled={!capturedImage || loading}
-            style={{ background: (!capturedImage || loading) ? '#c4b5fd' : '#a21caf', color: '#fff', fontWeight: 'bold', padding: '12px 24px', borderRadius: '999px', boxShadow: '0 2px 8px rgba(168,85,247,0.15)', border: 'none', cursor: (!capturedImage || loading) ? 'not-allowed' : 'pointer', opacity: (!capturedImage || loading) ? 0.5 : 1, marginBottom: '8px' }}
+            style={{
+              background: (!capturedImage || loading) ? '#c4b5fd' : 'linear-gradient(90deg, #a21caf 0%, #f59e42 100%)',
+              color: '#fff',
+              fontWeight: 'bold',
+              padding: '13px 32px',
+              borderRadius: '999px',
+              boxShadow: '0 2px 8px rgba(168,85,247,0.15)',
+              border: 'none',
+              cursor: (!capturedImage || loading) ? 'not-allowed' : 'pointer',
+              opacity: (!capturedImage || loading) ? 0.5 : 1,
+              marginBottom: '8px',
+              fontSize: '1.1rem',
+              letterSpacing: '0.5px',
+              transition: 'transform 0.15s',
+              alignSelf: 'center',
+              display: 'block',
+            }}
+            onMouseDown={e => { if (!loading && capturedImage) e.currentTarget.style.transform = 'scale(0.97)'; }}
+            onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
           >
             {loading ? 'Identifying...' : 'Identify Plant'}
           </button>
@@ -512,28 +476,28 @@ Keep each bullet point to 1-2 sentences maximum. Be specific and practical.`;
 
         {/* Captured Image Display */}
         {capturedImage && (
-          <div style={{ marginBottom: '24px' }}>
+          <div style={{ marginBottom: '28px', textAlign: 'center' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#374151', marginBottom: '12px' }}>Captured Image:</h2>
             <img
               src={capturedImage}
               alt="Captured Plant"
-              style={{ maxWidth: '100%', height: 'auto', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', margin: '0 auto', border: '1px solid #d1d5db' }}
+              style={{ maxWidth: '100%', height: 'auto', borderRadius: '18px', boxShadow: '0 4px 16px rgba(34,197,94,0.10)', margin: '0 auto', border: '2px solid #bbf7d0' }}
               onError={(e) => { e.target.onerror = null; e.target.src="https://placehold.co/400x300/cccccc/333333?text=Image+Load+Error"; }}
             />
           </div>
         )}
 
         {/* Result Tabs */}
-        <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #bbf7d0', marginBottom: '8px' }}>
+        <div style={{ background: 'linear-gradient(90deg, #f0fdf4 0%, #bbf7d0 100%)', padding: '18px', borderRadius: '18px', boxShadow: '0 2px 12px rgba(34,197,94,0.07)', border: '1.5px solid #bbf7d0', marginBottom: '12px' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#166534', marginBottom: '8px' }}>Identification Result:</h2>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button onClick={() => setActiveTab('name')} style={{ padding: '10px 16px', borderRadius: '8px', border: activeTab === 'name' ? '3px solid #166534' : '2px solid #d1d5db', background: activeTab === 'name' ? '#bbf7d0' : '#fff', color: '#166534', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', minWidth: '80px' }}>
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '18px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => setActiveTab('name')} style={{ padding: '12px 20px', borderRadius: '10px', border: activeTab === 'name' ? '3px solid #166534' : '2px solid #d1d5db', background: activeTab === 'name' ? 'linear-gradient(90deg, #bbf7d0 0%, #f0fdf4 100%)' : '#fff', color: '#166534', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', minWidth: '80px', transition: 'background 0.2s, border 0.2s' }}>
               🏷️ Name
             </button>
-            <button onClick={() => setActiveTab('agri')} style={{ padding: '10px 16px', borderRadius: '8px', border: activeTab === 'agri' ? '3px solid #92400e' : '2px solid #d1d5db', background: activeTab === 'agri' ? '#fef9c3' : '#fff', color: '#92400e', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', minWidth: '120px' }}>
+            <button onClick={() => setActiveTab('agri')} style={{ padding: '12px 20px', borderRadius: '10px', border: activeTab === 'agri' ? '3px solid #92400e' : '2px solid #d1d5db', background: activeTab === 'agri' ? 'linear-gradient(90deg, #fef9c3 0%, #fff7ed 100%)' : '#fff', color: '#92400e', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', minWidth: '120px', transition: 'background 0.2s, border 0.2s' }}>
               🌾 Agricultural Info
             </button>
-            <button onClick={() => setActiveTab('error')} style={{ padding: '10px 16px', borderRadius: '8px', border: activeTab === 'error' ? '3px solid #b91c1c' : '2px solid #d1d5db', background: activeTab === 'error' ? '#fee2e2' : '#fff', color: '#b91c1c', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', minWidth: '80px' }}>
+            <button onClick={() => setActiveTab('error')} style={{ padding: '12px 20px', borderRadius: '10px', border: activeTab === 'error' ? '3px solid #b91c1c' : '2px solid #d1d5db', background: activeTab === 'error' ? 'linear-gradient(90deg, #fee2e2 0%, #fff1f2 100%)' : '#fff', color: '#b91c1c', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', minWidth: '80px', transition: 'background 0.2s, border 0.2s' }}>
               ⚠️ Error
             </button>
           </div>
@@ -541,8 +505,10 @@ Keep each bullet point to 1-2 sentences maximum. Be specific and practical.`;
           {activeTab === 'name' && (
             <div style={{ marginBottom: '16px', textAlign: 'left' }}>
               <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#14532d', marginBottom: '8px' }}>Name</h3>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#14532d', wordBreak: 'break-word', marginBottom: '16px', marginLeft: '16px' }}>
-                {plantName || "No plant identified yet."}
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#14532d', wordBreak: 'break-word', marginBottom: '8px', marginLeft: '16px' }}>
+                {plantScientificName ? <span style={{ fontWeight: 'bold', color: '#166534' }}>{plantScientificName}</span> : null}
+                {plantCommonName ? <span style={{ fontWeight: '500', color: '#92400e', marginLeft: '12px' }}>{plantCommonName}</span> : null}
+                {!plantScientificName && !plantCommonName ? (plantName || "No plant identified yet.") : null}
               </div>
             </div>
           )}
@@ -581,12 +547,16 @@ Keep each bullet point to 1-2 sentences maximum. Be specific and practical.`;
 
         {/* Error Message Display */}
         {error && (
-          <div style={{ marginTop: '16px', padding: '12px', background: '#fee2e2', border: '1px solid #f87171', color: '#b91c1c', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-            <p style={{ fontWeight: '500' }}>Error:</p>
+          <div style={{ marginTop: '18px', padding: '14px', background: 'linear-gradient(90deg, #fee2e2 0%, #fff1f2 100%)', border: '1.5px solid #f87171', color: '#b91c1c', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', fontWeight: '500', fontSize: '1.05rem' }}>
+            <p style={{ fontWeight: '600', marginBottom: '6px' }}>Error:</p>
             <p>{error}</p>
           </div>
         )}
-      </div>
+      </main>
+      {/* Footer */}
+      <footer style={{ width: '100%', textAlign: 'center', padding: '18px 0 10px 0', color: '#166534', fontSize: '1rem', opacity: 0.7, letterSpacing: '0.5px', background: 'none' }}>
+        <span>Made with <span style={{ color: '#22c55e' }}>🌱</span> by Plant Identifier</span>
+      </footer>
     </div>
   );
 };
