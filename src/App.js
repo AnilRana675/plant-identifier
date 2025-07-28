@@ -432,37 +432,75 @@ Keep each bullet point to 1-2 sentences maximum. Be specific and practical.`;
           🌿 Plant Identifier
         </h1>
 
-        {/* Camera Feed Section */}
-        <div style={{ marginBottom: '24px', background: '#f3f4f6', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #e5e7eb' }}>
-          <video ref={videoRef} style={{ width: '100%', height: 'auto', borderRadius: '12px' }} autoPlay playsInline muted></video>
-          {/* Canvas is hidden, used for image capture */}
-          <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
-        </div>
-
-        {/* Controls Section */}
+        {/* Controls Section: Only file input for camera */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-          <button
-            onClick={startCamera}
-            style={{ background: '#22c55e', color: '#fff', fontWeight: 'bold', padding: '12px 24px', borderRadius: '999px', boxShadow: '0 2px 8px rgba(34,197,94,0.15)', border: 'none', cursor: 'pointer', marginBottom: '8px' }}
-          >
-            Start Camera
-          </button>
-          <button
-            onClick={takePhoto}
-            disabled={!stream}
-            style={{ background: !stream ? '#93c5fd' : '#3b82f6', color: '#fff', fontWeight: 'bold', padding: '12px 24px', borderRadius: '999px', boxShadow: '0 2px 8px rgba(59,130,246,0.15)', border: 'none', cursor: !stream ? 'not-allowed' : 'pointer', opacity: !stream ? 0.5 : 1, marginBottom: '8px' }}
-          >
-            Take Photo
-          </button>
-          <label style={{ fontWeight: 'bold', marginBottom: '8px' }}>
-            <span style={{ marginRight: '8px' }}>Or upload a photo:</span>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              style={{ marginTop: '8px' }}
-            />
-          </label>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            marginBottom: '8px'
+          }}>
+            <div style={{
+              background: 'linear-gradient(120deg, #f0fdf4 0%, #dbeafe 100%)',
+              borderRadius: '18px',
+              boxShadow: '0 6px 24px rgba(34,197,94,0.10)',
+              padding: '32px 18px',
+              border: '2px solid #bbf7d0',
+              width: '100%',
+              maxWidth: '400px',
+              cursor: 'pointer',
+              transition: 'box-shadow 0.2s',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto'
+            }}>
+              <label htmlFor="camera-upload" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                cursor: 'pointer',
+                width: '100%'
+              }}>
+                <span style={{ fontSize: '3rem', color: '#22c55e', marginBottom: '10px' }}>📷</span>
+                <span style={{ fontWeight: 'bold', fontSize: '1.25rem', color: '#14532d', marginBottom: '6px', letterSpacing: '0.5px' }}>Take a Photo</span>
+                <span style={{ fontSize: '1rem', color: '#374151', marginBottom: '10px', fontWeight: '500', textAlign: 'center' }}>Use your device camera to identify a plant</span>
+                <input
+                  id="camera-upload"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleImageUpload}
+                  style={{ display: 'none' }}
+                />
+                <span style={{
+                  background: 'linear-gradient(90deg, #22c55e 0%, #3b82f6 100%)',
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  fontSize: '1.1rem',
+                  padding: '12px 28px',
+                  borderRadius: '999px',
+                  boxShadow: '0 2px 8px rgba(34,197,94,0.10)',
+                  marginTop: '10px',
+                  border: 'none',
+                  letterSpacing: '0.5px',
+                  textAlign: 'center',
+                  userSelect: 'none',
+                  cursor: 'pointer',
+                  display: 'inline-block'
+                }}
+                  onClick={() => document.getElementById('camera-upload').click()}
+                >
+                  <span style={{ fontSize: '1.3rem', marginRight: '8px', verticalAlign: 'middle' }}>📸</span>
+                  Open Camera
+                </span>
+              </label>
+            </div>
+          </div>
           <button
             onClick={identifyPlant}
             disabled={!capturedImage || loading}
