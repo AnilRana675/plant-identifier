@@ -350,13 +350,15 @@ const App = () => {
       setPlantName(`${displayScientific}${displayCommon ? ' / ' + displayCommon : ''}`);
       const geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY;
       const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
-      const geminiPrompt = `Given the following plant identification results from Plant.id and Pl@ntNet, provide a concise, practical agricultural guide for this plant. Use the info below:\n${plantIdInfo}\n${plantNetInfo}\n\nFormat the result in these categories: Cultivation, Care & Maintenance, Harvesting, Growth Info, Common Issues. Use bullet points, keep each point short and practical.`;
+      const geminiPrompt = `Given the following plant identification results from Plant.id and Pl@ntNet, and the attached image, provide a concise, practical agricultural guide for this plant. Use the info below:\n${plantIdInfo}\n${plantNetInfo}\n\nFormat the result in these categories: Cultivation, Care & Maintenance, Harvesting, Growth Info, Common Issues. Use bullet points, keep each point short and practical.`;
+      // Gemini multimodal payload: text + image
       const geminiPayload = {
         contents: [
           {
             role: "user",
             parts: [
-              { text: geminiPrompt }
+              { text: geminiPrompt },
+              { inline_data: { mime_type: "image/png", data: base64ImageData } }
             ]
           }
         ]
