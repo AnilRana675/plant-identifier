@@ -344,7 +344,17 @@ const App = () => {
       // --- 3. Gemini validation: check if image contains a valid plant ---
       const geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY;
       const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
-      const geminiCheckPrompt = "Does this image contain a valid plant? Answer only 'yes' or 'no'.";
+      const geminiCheckPrompt = `Analyze this image carefully. Does it contain a real, living plant (trees, flowers, leaves, stems, roots, etc.)? 
+      
+      Do NOT identify as a plant:
+      - Human faces or body parts
+      - Animals or insects
+      - Non-living objects (toys, decorations, artificial plants)
+      - Food items (unless clearly showing the whole plant)
+      - Buildings, vehicles, or other man-made objects
+      
+      Answer ONLY 'yes' if you see actual living plant material (leaves, stems, flowers, bark, roots, etc.). Answer 'no' for everything else.`;
+      
       const geminiCheckPayload = {
         contents: [
           {
@@ -368,14 +378,17 @@ const App = () => {
             geminiCheckResult.candidates[0].content && geminiCheckResult.candidates[0].content.parts &&
             geminiCheckResult.candidates[0].content.parts.length > 0) {
           const answer = geminiCheckResult.candidates[0].content.parts[0].text.trim().toLowerCase();
-          if (answer === "yes") isPlant = true;
+          isPlant = answer.includes("yes");
         }
       } catch (err) {
         // If Gemini check fails, fallback to API results
         isPlant = !!(plantIdScientific || plantNetScientific || plantIdCommon || plantNetCommon);
       }
+
       if (!isPlant) {
-        setPlantName("No plant detected in the image.");
+        setPlantName("No plant detected in the image. Please upload an image containing a real plant.");
+        setPlantScientificName('');
+        setPlantCommonName('');
         setAgriDetails(null);
         setLoading(false);
         return;
