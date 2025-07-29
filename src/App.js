@@ -341,21 +341,51 @@ const App = () => {
         plantNetInfo += "Pl@ntNet API error.\n";
       }
 
-      // --- 3. Feed combined info to Gemini ---
-      // Compose both scientific and common names for display
-      let displayScientific = plantIdScientific || plantNetScientific;
-      let displayCommon = plantIdCommon || plantNetCommon;
-      setPlantScientificName(displayScientific);
-      setPlantCommonName(displayCommon);
-      if (!displayScientific && !displayCommon) {
+      // --- 3. Gemini validation: check if image contains a valid plant ---
+      const geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY;
+      const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+      const geminiCheckPrompt = "Does this image contain a valid plant? Answer only 'yes' or 'no'.";
+      const geminiCheckPayload = {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: geminiCheckPrompt },
+              { inline_data: { mime_type: "image/png", data: base64ImageData } }
+            ]
+          }
+        ]
+      };
+      let isPlant = false;
+      try {
+        const geminiCheckResponse = await fetch(geminiApiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(geminiCheckPayload)
+        });
+        const geminiCheckResult = await geminiCheckResponse.json();
+        if (geminiCheckResult.candidates && geminiCheckResult.candidates.length > 0 &&
+            geminiCheckResult.candidates[0].content && geminiCheckResult.candidates[0].content.parts &&
+            geminiCheckResult.candidates[0].content.parts.length > 0) {
+          const answer = geminiCheckResult.candidates[0].content.parts[0].text.trim().toLowerCase();
+          if (answer === "yes") isPlant = true;
+        }
+      } catch (err) {
+        // If Gemini check fails, fallback to API results
+        isPlant = !!(plantIdScientific || plantNetScientific || plantIdCommon || plantNetCommon);
+      }
+      if (!isPlant) {
         setPlantName("No plant detected in the image.");
         setAgriDetails(null);
         setLoading(false);
         return;
       }
+      // Compose both scientific and common names for display
+      let displayScientific = plantIdScientific || plantNetScientific;
+      let displayCommon = plantIdCommon || plantNetCommon;
+      setPlantScientificName(displayScientific);
+      setPlantCommonName(displayCommon);
       setPlantName(`${displayScientific}${displayCommon ? ' / ' + displayCommon : ''}`);
-      const geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY;
-      const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
       const geminiPrompt = `Given the following plant identification results from Plant.id and Pl@ntNet, and the attached image, provide a concise, practical agricultural guide for this plant. Use the info below:\n${plantIdInfo}\n${plantNetInfo}\n\nFormat the result in these categories: Cultivation, Care & Maintenance, Harvesting, Growth Info, Common Issues. Use bullet points, keep each point short and practical.`;
       // Gemini multimodal payload: text + image
       const geminiPayload = {
