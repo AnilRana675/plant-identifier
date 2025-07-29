@@ -347,6 +347,12 @@ const App = () => {
       let displayCommon = plantIdCommon || plantNetCommon;
       setPlantScientificName(displayScientific);
       setPlantCommonName(displayCommon);
+      if (!displayScientific && !displayCommon) {
+        setPlantName("No plant detected in the image.");
+        setAgriDetails(null);
+        setLoading(false);
+        return;
+      }
       setPlantName(`${displayScientific}${displayCommon ? ' / ' + displayCommon : ''}`);
       const geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY;
       const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
